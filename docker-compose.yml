@@ -1,0 +1,57 @@
+services:
+  # Primary Biomedical Relational Database with pgvector extension
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: pharmamind-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgrespassword
+      POSTGRES_DB: pharmamind
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d pharmamind"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # PharmaMind AI FastAPI Backend
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
+    container_name: pharmamind-backend
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      - ENVIRONMENT=production
+      - DEBUG=false
+      - DATABASE_URL=postgresql+asyncpg://postgres:postgrespassword@postgres:5432/pharmamind
+      - DATABASE_FALLBACK_SQLITE=true
+      - ML_DEVICE=cpu
+      - TORCH_NUM_THREADS=4
+      - ENABLE_LAZY_MODEL_LOADING=true
+      - MAX_BATCH_SIZE=8
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  # PharmaMind AI React Frontend
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend
+    container_name: pharmamind-frontend
+    restart: unless-stopped
+    ports:
+      - "5173:80"
+    depends_on:
+      - backend
+
+volumes:
+  postgres_data:
+
